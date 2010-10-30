@@ -38,18 +38,18 @@
   (letrec ((aux (lambda (x)
                   (cond ((not (list? x)) x)
                         ((= (length x) 0) x)
-                        ((= (length x) 1) (list (aux x)))
+                        ((= (length x) 1) (list (aux (car x))))
                         ((or (equal? (car x) 'lambda)
                              (equal? (car x) 'lambda-curried))
                          (append (list 'lambda-curried (cadr x)) (map aux (cddr x)))) ;; skip lambda and bindings
                         ((equal? (car x) 'curry) (cons (cadr x) (map aux (cddr x))))  ;; skip uncurry but recurse
+                        ((equal? (car x) 'cataBool) (cons (car x) (map aux (cdr x)))) ;; skip the only lazy construct
                         ((equal? (car x) 'deep-curry) (cdr x))                        ;; skip uncurry in this subexpr
                         ((equal? (car x) 'quote) x)                                   ;; don't touch quoted stuff
                         (#t (cons 'uncurry (map aux x)))))))
     (list 'eval (aux e))))
 
 ;; define with implicit deep-uncurry for the whole body
-;; TODO: replace bindings with an explicit lambda-curry
 (define-macro (define-curry sig . body)
   `(define ,sig (deep-uncurry ,(cons 'curry (cons 'begin body))))) ;; curry the begin
 ;;------------------------------------------------------------------
@@ -66,26 +66,38 @@
       z
       (f (car l) (foldr f z (cdr l)))))
 ;;------------------------------------------------------------------
-;; booleans
-(define-curry cataBool
-  (lambda (f g b)
-    (b f g)))
+;; strict booleans
+;; (define-curry cataBool
+;;   (lambda (f g b)
+;;     (b f g)))
+
+;; (define-curry tru
+;;   (lambda (f g)
+;;     f))
+
+;; (define-curry fals
+;;   (lambda (f g)
+;;     g))
+
+;; (define (reifyBool b)
+;;   (uncurry b #t #f))
+
+;; (define (reflectBool b)
+;;   (if b
+;;       tru
+;;       fals))
+;;------------------------------------------------------------------
+;; lazy booleans
+(define-macro (cataBool f g b)
+  `(uncurry ,b (lambda () ,f) (lambda () ,g)))
 
 (define-curry tru
   (lambda (f g)
-    f))
+    (f)))
 
 (define-curry fals
   (lambda (f g)
-    g))
-
-(define (reifyBool b)
-  (uncurry b #t #f))
-
-(define (reflectBool b)
-  (if b
-      tru
-      fals))
+    (g)))
 ;;------------------------------------------------------------------
 ;; pairs
 (define-curry cataPair
@@ -159,6 +171,27 @@
 
 (debug '(reifyNat (uncurry add (pred (reflectNat 10)) (reflectNat 80))))
 ;;------------------------------------------------------------------
+;; maybe
+(define-curry cataMaybe
+  (lambda (f z x)
+    (x f z)))
+
+(define-curry nothing
+  (lambda (f z)
+    z))
+
+(define-curry just
+  (lambda (x f z)
+    (f x)))
+
+(define (reflectMaybe x)
+  (if (equal? x 'nothing)
+      nothing
+      (just x)))
+
+(define (reifyMaybe x)
+  (uncurry x id 'nothing))
+;;------------------------------------------------------------------
 ;; lists
 (define-curry cataList
   (lambda (f z l)
@@ -183,14 +216,19 @@
 ;;   (lambda-curried (f g s p a)
 ;;     (uncurry cataBool (f (uncurry hyloList f g s p (s a))) g (p a))))
 
-;; (define anaList
-;;   (lambda-curried (s p l)
+
+(define-curry anaList
+  (lambda (s p x)
+    (cataBool (kons (first (s x)) (anaList s p (second (s x)))) nil (p x))))
 
 (define-curry head
   (cataList const 'undefined))
 
 (define (reifyList l)
   (uncurry l (lambda-curried (x xs) (cons x xs)) '()))
+
+(define (reifyNatList l)
+  (map reifyNat (reifyList l)))
 
 (define (reflectList . args)
   (foldr (lambda (x xs) (uncurry kons x xs)) nil args))
@@ -200,10 +238,15 @@
 
 (debug '(head (tail (reflectList 1 2 3))))
 
-;; (define destruct_count_p
-;;   (uncurry cataNat (const tru) fals)))
+(define-curry destruct_count_p
+  (cataNat (const tru) fals))
 
-;; (define destruct_count_s
-;;   (uncurry paraNat (lambda-curried (k ks)
-;;                      (uncurry pair (succ k) k))
-;;                    'undefined))
+(define-curry destruct_count_s
+  (paraNat (lambda (k ks)
+             (pair (succ k) k))
+           'undefined))
+
+(define-curry count
+  (anaList destruct_count_s destruct_count_p))
+
+(debug '(reifyNatList (count (reflectNat 10))))
