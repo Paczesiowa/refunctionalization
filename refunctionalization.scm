@@ -114,6 +114,11 @@
 (define-curry second
   (cataPair (lambda (x y) y)))
 
+(define-curry ><
+  (lambda (f g p)
+    (pair (f (first p))
+             (g (second p)))))
+
 (define (reifyPair p)
   (uncurry p (lambda-curried (a b) (cons a b))))
 
@@ -212,14 +217,16 @@
                      (pair z nil)
                      l))))
 
-;; (define hyloList
-;;   (lambda-curried (f g s p a)
-;;     (uncurry cataBool (f (uncurry hyloList f g s p (s a))) g (p a))))
-
+(define-curry hyloList
+  (lambda (f g s p a)
+    (cataBool (f (>< id (hyloList f g s p) (s a)))
+              g
+              (p a))))
 
 (define-curry anaList
-  (lambda (s p x)
-    (cataBool (kons (first (s x)) (anaList s p (second (s x)))) nil (p x))))
+  (hyloList (lambda (p)
+              (kons (first p) (second p)))
+            nil))
 
 (define-curry head
   (cataList const 'undefined))
