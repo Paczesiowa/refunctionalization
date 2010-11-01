@@ -53,18 +53,28 @@
 (define-macro (define-curry sig . body)
   `(define ,sig (deep-uncurry ,(cons 'curry (cons 'begin body))))) ;; curry the begin
 ;;------------------------------------------------------------------
-;; utils
-(define id
+;; scheme utils
+(define (foldr f z l)
+  (if (null? l)
+      z
+      (f (car l) (foldr f z (cdr l)))))
+;;------------------------------------------------------------------
+;; lambda utils
+(define-curry id
   (lambda (x) x))
 
 (define-curry const
   (lambda (a b)
     a))
 
-(define (foldr f z l)
-  (if (null? l)
-      z
-      (f (car l) (foldr f z (cdr l)))))
+;; TODO this is not lambda term, use fixpoint
+(define-curry undefined
+  (lambda (x)
+    undefined))
+
+(define-curry o
+  (lambda (f g x)
+    (f (g x))))
 ;;------------------------------------------------------------------
 ;; strict booleans
 ;; (define-curry cataBool
@@ -88,6 +98,8 @@
 ;;       fals))
 ;;------------------------------------------------------------------
 ;; lazy booleans
+
+;; definition
 (define-macro (cataBool f g b)
   `(uncurry ,b (lambda () ,f) (lambda () ,g)))
 
@@ -98,8 +110,19 @@
 (define-curry fals
   (lambda (f g)
     (g)))
+
+;; projections
+(define (reifyBool b)
+  (cataBool #t #f b))
+
+;; functions
+(define-curry not
+  (lambda (x)
+    (cataBool fals tru x)))
 ;;------------------------------------------------------------------
 ;; pairs
+
+;; definition
 (define-curry cataPair
   (lambda (f x)
     (x f)))
@@ -108,6 +131,14 @@
   (lambda (x y p)
     (p x y)))
 
+;; projections
+(define (reifyPair p)
+  (uncurry p (lambda-curried (a b) (cons a b))))
+
+(define (reflectPair a b)
+  (uncurry pair a b))
+
+;; functions
 (define-curry first
   (cataPair (lambda (x y) x)))
 
@@ -118,14 +149,10 @@
   (lambda (f g p)
     (pair (f (first p))
              (g (second p)))))
-
-(define (reifyPair p)
-  (uncurry p (lambda-curried (a b) (cons a b))))
-
-(define (reflectPair a b)
-  (uncurry pair a b))
 ;;------------------------------------------------------------------
 ;; nats
+
+;; definition
 (define-curry cataNat
   (lambda (s z n)
     (n s z)))
@@ -138,6 +165,7 @@
   (lambda (n s z)
     (s (cataNat s z n))))
 
+;; projections
 (define (reifyNat n)
   (uncurry n (lambda (n) (+ 1 n)) 0))
 
@@ -146,6 +174,7 @@
       zero
       (uncurry succ (reflectNat (- n 1)))))
 
+;; morphisms
 (define-curry paraNat
   (lambda (f z n)
     (first (cataNat (lambda (y)
@@ -153,16 +182,9 @@
                     (pair z zero)
                     n))))
 
+;; functions
 (define-curry pred
   (paraNat (lambda (n k) n) zero))
-
-;; (define hyloNat
-;;   (lambda-curried (f g s p a)
-;;     (uncurry cataBool (f (uncurry hyloNat f g s p (s a))) g (p a))))
-
-;; (define anaNat
-;;   (lambda-curried (n s p)
-;;     (uncurry hyloNat succ zero s p n)))
 
 (define-curry add
   (cataNat (lambda (g x)
@@ -174,9 +196,23 @@
              (add b (x b)))
            (const zero)))
 
+(define-curry isZero
+  (cataNat (const fals) tru))
+
+(define-curry lt
+  (paraNat (lambda (x w)
+	     (paraNat (lambda (y u)
+			(w y))
+		      fals))
+	   (const tru)))
+
+;; tests
 (debug '(reifyNat (uncurry add (pred (reflectNat 10)) (reflectNat 80))))
+(debug '(reifyBool (uncurry lt (reflectNat 10) (reflectNat 11))))
 ;;------------------------------------------------------------------
 ;; maybe
+
+;; definition
 (define-curry cataMaybe
   (lambda (f z x)
     (x f z)))
@@ -189,6 +225,7 @@
   (lambda (x f z)
     (f x)))
 
+;; projections
 (define (reflectMaybe x)
   (if (equal? x 'nothing)
       nothing
@@ -198,6 +235,8 @@
   (uncurry x id 'nothing))
 ;;------------------------------------------------------------------
 ;; lists
+
+;; definition
 (define-curry cataList
   (lambda (f z l)
     (l f z)))
@@ -210,6 +249,25 @@
   (lambda (x xs f z)
     (f x (cataList f z xs))))
 
+;; projections
+(define (reifyList l)
+  (uncurry l (lambda-curried (x xs) (cons x xs)) '()))
+
+(define (reifyNatList l)
+  (map reifyNat (reifyList l)))
+
+(define (reifyPairNatLists p)
+  (uncurry cataPair (lambda-curried (a b)
+		      (cons (reifyNatList a) (reifyNatList b)))
+	            p))
+
+(define (reflectList . args)
+  (foldr (lambda (x xs) (uncurry kons x xs)) nil args))
+
+(define (reflectNatList . args)
+  (eval (cons 'reflectList (map reflectNat args))))
+
+;; morphisms
 (define-curry paraList
   (lambda (f z l)
     (first (cataList (lambda (x ys)
@@ -228,32 +286,76 @@
               (kons (first p) (second p)))
             nil))
 
+;; functions
 (define-curry head
-  (cataList const 'undefined))
-
-(define (reifyList l)
-  (uncurry l (lambda-curried (x xs) (cons x xs)) '()))
-
-(define (reifyNatList l)
-  (map reifyNat (reifyList l)))
-
-(define (reflectList . args)
-  (foldr (lambda (x xs) (uncurry kons x xs)) nil args))
+  (cataList const undefined))
 
 (define-curry tail
-  (paraList (lambda (x xs ys) xs) 'undefined))
+  (paraList (lambda (x xs ys) xs) undefined))
 
+(define-curry ++
+  (lambda (xs ys)
+    (cataList kons ys xs)))
+
+(define-curry countDownFrom
+  (anaList (paraNat (lambda (k ks)
+		      (pair (succ k) k))
+		    undefined)
+	   (o not isZero)))
+
+(define-curry partitionR
+  (lambda (p)
+    (cataList (lambda (x ys)
+		(cataBool (pair (kons x (first ys)) (second ys))
+			  (pair (first ys) (kons x (second ys)))
+			  (p x)))
+	      (pair nil nil))))
+
+(define-curry nullR
+  (cataList (lambda (x ys) fals) tru))
+
+;; tests
 (debug '(head (tail (reflectList 1 2 3))))
+(debug '(reifyNatList (countDownFrom (reflectNat 10))))
+(debug '(reifyList (uncurry ++ (reflectList 1 2 3) (reflectList 4 5 6))))
+(debug '(reifyPairNatLists (uncurry partitionR (lambda (x) (uncurry lt x (reflectNat 3)))
+				               (reflectNatList 5 1 2 6 5 0 5 6))))
+;;------------------------------------------------------------------
+;; trees
 
-(define-curry destruct_count_p
-  (cataNat (const tru) fals))
+;; definition
+(define-curry cataTree
+  (lambda (f z l)
+    (l f z)))
 
-(define-curry destruct_count_s
-  (paraNat (lambda (k ks)
-             (pair (succ k) k))
-           'undefined))
+(define-curry leaf
+  (lambda (f z)
+    z))
 
-(define-curry count
-  (anaList destruct_count_s destruct_count_p))
+(define-curry node
+  (lambda (x l r f z)
+    (f x (cataTree f z l) (cataTree f z r))))
 
-(debug '(reifyNatList (count (reflectNat 10))))
+;; morphisms
+(define-curry hyloTree
+  (lambda (f g s p a)
+    (cataBool (f (>< id (>< (hyloTree f g s p) (hyloTree f g s p)) (s a)))
+              g
+              (p a))))
+
+;;------------------------------------------------------------------
+;; treeSort
+(define-curry part
+  (paraList (lambda (x xs ys)
+	      (pair x (partitionR (lambda (y) (lt y x))
+				  xs)))
+	    undefined))
+
+(define-curry flatten
+  (lambda (p)
+    (++ (first (second p)) (kons (first p) (second (second p))))))
+
+(define-curry treeSort
+  (hyloTree flatten nil part (o not nullR)))
+
+(debug '(reifyNatList (treeSort (reflectNatList 2 4 1 5 3))))
