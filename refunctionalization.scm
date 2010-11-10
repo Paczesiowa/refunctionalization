@@ -1,3 +1,4 @@
+#!/usr/bin/mzscheme -f
 (require mzlib/defmacro)
 
 (define (debug e)
@@ -359,3 +360,37 @@
   (hyloTree flatten nil part (o not nullR)))
 
 (debug '(reifyNatList (treeSort (reflectNatList 2 4 1 5 3))))
+;;------------------------------------------------------------------
+;; para-histomorphisms
+(define-macro (pairPH x y)
+  (let ((p (gensym)))
+    `(lambda (,p) (uncurry ,p (lambda () ,x) (lambda () ,y)))))
+
+(define-curry fstPH
+  (lambda (x y)
+    (x)))
+
+(define-curry sndPH
+  (lambda (x y)
+    (y)))
+
+;; projections
+;; (define (reifyPairPH p)
+;;   (uncurry p (lambda-curried (a b) (cons a b))))
+
+;; functions
+;; (define-curry not
+;;   (lambda (x)
+;;     (cataBool fals tru x)))
+
+;; (define-curry natPH
+;;   (lambda (z s n)
+;;     (n z s)))
+
+;; (define-curry zeroPH
+;;   (lambda (z s)
+;;     (pairPH z undefined)))
+
+;; (define-curry succPH
+;;   (lambda (n z s)
+;;     ((lambda (h) pairPH (s n h) h) (natPH z s n))))
