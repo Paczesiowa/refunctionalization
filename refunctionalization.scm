@@ -208,8 +208,8 @@
 	   (const tru)))
 
 ;; tests
-(debug '(reifyNat (uncurry add (pred (reflectNat 10)) (reflectNat 80))))
-(debug '(reifyBool (uncurry lt (reflectNat 10) (reflectNat 11))))
+;; (debug '(reifyNat (uncurry add (pred (reflectNat 10)) (reflectNat 80))))
+;; (debug '(reifyBool (uncurry lt (reflectNat 10) (reflectNat 11))))
 ;;------------------------------------------------------------------
 ;; maybe
 
@@ -316,11 +316,11 @@
   (cataList (lambda (x ys) fals) tru))
 
 ;; tests
-(debug '(head (tail (reflectList 1 2 3))))
-(debug '(reifyNatList (countDownFrom (reflectNat 10))))
-(debug '(reifyList (uncurry ++ (reflectList 1 2 3) (reflectList 4 5 6))))
-(debug '(reifyPairNatLists (uncurry partitionR (lambda (x) (uncurry lt x (reflectNat 3)))
-				               (reflectNatList 5 1 2 6 5 0 5 6))))
+;; (debug '(head (tail (reflectList 1 2 3))))
+;; (debug '(reifyNatList (countDownFrom (reflectNat 10))))
+;; (debug '(reifyList (uncurry ++ (reflectList 1 2 3) (reflectList 4 5 6))))
+;; (debug '(reifyPairNatLists (uncurry partitionR (lambda (x) (uncurry lt x (reflectNat 3)))
+;; 				               (reflectNatList 5 1 2 6 5 0 5 6))))
 ;;------------------------------------------------------------------
 ;; trees
 
@@ -359,38 +359,98 @@
 (define-curry treeSort
   (hyloTree flatten nil part (o not nullR)))
 
-(debug '(reifyNatList (treeSort (reflectNatList 2 4 1 5 3))))
+;; (debug '(reifyNatList (treeSort (reflectNatList 2 4 1 5 3))))
 ;;------------------------------------------------------------------
 ;; para-histomorphisms
+
+;; pairPH must be 'curry'-ied inside define-curry because it's a macro
+;; and macros are lazy
 (define-macro (pairPH x y)
   (let ((p (gensym)))
     `(lambda (,p) (uncurry ,p (lambda () ,x) (lambda () ,y)))))
 
+(define-curry cataPairPH
+  (lambda (f x)
+    (x f)))
+
 (define-curry fstPH
-  (lambda (x y)
-    (x)))
+  (cataPairPH (lambda (x y)
+		(x))))
 
 (define-curry sndPH
-  (lambda (x y)
-    (y)))
+  (cataPairPH (lambda (x y)
+		(y))))
+
+(debug '(sndPH (pairPH 1 2)))
+
+(define-curry natPH
+  (lambda (z s n)
+    (n z s)))
+
+(define-curry zeroPH
+  (lambda (z s)
+    (curry pairPH z undefined)))
+
+(define-curry succPH
+  (lambda (n z s)
+    ((lambda (h) (curry pairPH (s n h) h)) (natPH z s n))))
 
 ;; projections
-;; (define (reifyPairPH p)
-;;   (uncurry p (lambda-curried (a b) (cons a b))))
+(define (reifyNatPH n)
+  (fstPH (uncurry natPH 0
+		        (lambda-curried (x y) (+ (reifyNatPH x) 1))
+			n)))
 
-;; functions
-;; (define-curry not
-;;   (lambda (x)
-;;     (cataBool fals tru x)))
+(define (reflectNatPH n)
+  (if (= n 0)
+      zeroPH
+      (uncurry succPH (reflectNatPH (- n 1)))))
 
-;; (define-curry natPH
-;;   (lambda (z s n)
-;;     (n z s)))
+(debug '(reifyNatPH (reflectNatPH 0)))
+(debug '(reifyNatPH (reflectNatPH 10)))
 
-;; (define-curry zeroPH
-;;   (lambda (z s)
-;;     (pairPH z undefined)))
+(define-curry listPH
+  (lambda (n c l)
+    (l n c)))
 
-;; (define-curry succPH
-;;   (lambda (n z s)
-;;     ((lambda (h) pairPH (s n h) h) (natPH z s n))))
+(define-curry nilPH
+  (lambda (n c)
+    (curry pairPH n undefined)))
+
+(define-curry consPH
+  (lambda (x xs n c)
+    ((lambda (h) (curry pairPH (uncurry c x xs h) h))
+     (uncurry listPH n c xs))))
+
+;; projections
+(define (reifyListPH n)
+  (fstPH (uncurry listPH '()
+		         (lambda-curried (x xs h) (cons x (reifyNatPH xs)))
+			 n)))
+
+(debug '(reifyListPH nilPH))
+(debug '(reifyListPH (uncurry consPH 1 nilPH)))
+(debug '(reifyListPH (uncurry consPH 1 (uncurry consPH 2 nilPH))))
+;; (define (reflectNatPH n)
+;;   (if (= n 0)
+;;       zeroPH
+;;       (uncurry succPH (reflectNatPH (- n 1)))))
+
+
+(define-curry isZeroPH
+  (natPH tru (lambda (m h) fals)))
+
+(debug '(reifyBool (fstPH (isZeroPH (reflectNatPH 0)))))
+(debug '(reifyBool (fstPH (isZeroPH (reflectNatPH 10)))))
+
+(define-curry isOnePH
+  (natPH fals (lambda (m h) (fstPH (isZeroPH m)))))
+
+(debug '(reifyBool (fstPH (isOnePH (reflectNatPH 0)))))
+(debug '(reifyBool (fstPH (isOnePH (reflectNatPH 1)))))
+(debug '(reifyBool (fstPH (isOnePH (reflectNatPH 10)))))
+
+(define-curry onePH
+  (succPH zeroPH))
+
+(debug '(reifyNatPH onePH))
