@@ -397,9 +397,7 @@
 
 ;; projections
 (define (reifyNatPH n)
-  (fstPH (uncurry natPH 0
-		        (lambda-curried (x y) (+ (reifyNatPH x) 1))
-			n)))
+  (fstPH (uncurry n 0 (lambda-curried (m h) (+ 1 (fstPH h))))))
 
 (define (reflectNatPH n)
   (if (= n 0)
@@ -423,11 +421,14 @@
      (uncurry listPH n c xs))))
 
 ;; projections
-(define (reifyListPH n)
-  (fstPH (uncurry listPH '()
-		         (lambda-curried (x xs h) (cons x (reifyListPH xs)))
-			 n)))
+(define (reifyListPH l)
+  (fstPH (uncurry l '() (lambda-curried (x xs h) (cons x (fstPH h))))))
 
+(define (reflectListPH . args)
+  (foldr (lambda (x xs) (uncurry consPH x xs)) nilPH args))
+
+(debug '(reifyListPH (reflectListPH 1 2 3 4)))
+(debug '(reifyListPH (reflectListPH )))
 (debug '(reifyListPH nilPH))
 (debug '(reifyListPH (uncurry consPH 1 nilPH)))
 (debug '(reifyListPH (uncurry consPH 1 (uncurry consPH 2 (uncurry consPH 3 nilPH)))))
@@ -438,13 +439,14 @@
 
 
 (define-curry isZeroPH
-  (natPH tru (lambda (m h) fals)))
+  (lambda (n)
+    (fstPH (natPH tru (lambda (m h) fals ) n))))
 
-(debug '(reifyBool (fstPH (isZeroPH (reflectNatPH 0)))))
-(debug '(reifyBool (fstPH (isZeroPH (reflectNatPH 10)))))
+(debug '(reifyBool (isZeroPH (reflectNatPH 0))))
+(debug '(reifyBool (isZeroPH (reflectNatPH 10))))
 
 (define-curry isOnePH
-  (natPH fals (lambda (m h) (fstPH (isZeroPH m)))))
+  (natPH fals (lambda (m h) (isZeroPH m))))
 
 (debug '(reifyBool (fstPH (isOnePH (reflectNatPH 0)))))
 (debug '(reifyBool (fstPH (isOnePH (reflectNatPH 1)))))
@@ -454,3 +456,31 @@
   (succPH zeroPH))
 
 (debug '(reifyNatPH onePH))
+
+(define-curry cataPH
+  (lambda (z s n)
+    (fstPH (natPH z (lambda-curried (m h) (s (fstPH h))) n))))
+
+(define-curry paraPH
+  (lambda (z s n)
+    (fstPH (natPH z (lambda-curried (m h) (s m (fstPH h))) n))))
+
+(define-curry plusPH
+  (cataPH id (lambda (g x)
+                (succPH (g x)))))
+
+(debug '(reifyNatPH (uncurry plusPH (reflectNatPH 3) (reflectNatPH 4))))
+
+(define-curry fibPH
+  (lambda (n)
+    (fstPH (natPH onePH
+           (lambda-curried (m  h)
+             (cataBool onePH (plusPH (fstPH h) (fstPH (sndPH h))) (isZeroPH m) ))
+           n))))
+
+
+(debug '(reifyNatPH (fibPH (reflectNatPH 0))))
+(debug '(reifyNatPH (fibPH (reflectNatPH 1))))
+(debug '(reifyNatPH (fibPH (reflectNatPH 2))))
+(debug '(reifyNatPH (fibPH (reflectNatPH 5))))
+(debug '(reifyNatPH (fibPH (reflectNatPH 11))))
