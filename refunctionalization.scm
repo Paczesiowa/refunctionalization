@@ -425,12 +425,12 @@
 ;; projections
 (define (reifyListPH n)
   (fstPH (uncurry listPH '()
-		         (lambda-curried (x xs h) (cons x (reifyNatPH xs)))
+		         (lambda-curried (x xs h) (cons x (reifyListPH xs)))
 			 n)))
 
 (debug '(reifyListPH nilPH))
 (debug '(reifyListPH (uncurry consPH 1 nilPH)))
-(debug '(reifyListPH (uncurry consPH 1 (uncurry consPH 2 nilPH))))
+(debug '(reifyListPH (uncurry consPH 1 (uncurry consPH 2 (uncurry consPH 3 nilPH)))))
 ;; (define (reflectNatPH n)
 ;;   (if (= n 0)
 ;;       zeroPH
