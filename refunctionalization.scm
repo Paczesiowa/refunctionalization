@@ -73,7 +73,7 @@
   (lambda (x)
     undefined))
 
-(define-curry o
+(define-curry combine
   (lambda (f g x)
     (f (g x))))
 ;;------------------------------------------------------------------
@@ -302,7 +302,7 @@
   (anaList (paraNat (lambda (k ks)
 		      (pair (succ k) k))
 		    undefined)
-	   (o not isZero)))
+	   (combine not isZero)))
 
 (define-curry partitionR
   (lambda (p)
@@ -357,7 +357,7 @@
     (++ (first (second p)) (kons (first p) (second (second p))))))
 
 (define-curry treeSort
-  (hyloTree flatten nil part (o not nullR)))
+  (hyloTree flatten nil part (combine not nullR)))
 
 ;; (debug '(reifyNatList (treeSort (reflectNatList 2 4 1 5 3))))
 ;;------------------------------------------------------------------
@@ -389,7 +389,7 @@
 
 (define-curry zeroPH
   (lambda (z s)
-    (curry pairPH z undefined)))
+    (curry pairPH z 'undefined)))
 
 (define-curry succPH
   (lambda (n z s)
@@ -413,7 +413,7 @@
 
 (define-curry nilPH
   (lambda (n c)
-    (curry pairPH n undefined)))
+    (curry pairPH n 'undefined)))
 
 (define-curry consPH
   (lambda (x xs n c)
@@ -424,8 +424,14 @@
 (define (reifyListPH l)
   (fstPH (uncurry l '() (lambda-curried (x xs h) (cons x (fstPH h))))))
 
+(define (reifyNatListPH l)
+  (map reifyNatPH (reifyListPH l)))
+
 (define (reflectListPH . args)
   (foldr (lambda (x xs) (uncurry consPH x xs)) nilPH args))
+
+(define (reflectNatListPH . args)
+  (eval (cons 'reflectListPH (map reflectNatPH args))))
 
 (debug '(reifyListPH (reflectListPH 1 2 3 4)))
 (debug '(reifyListPH (reflectListPH )))
@@ -446,11 +452,11 @@
 (debug '(reifyBool (isZeroPH (reflectNatPH 10))))
 
 (define-curry isOnePH
-  (natPH fals (lambda (m h) (isZeroPH m))))
+  (combine fstPH (natPH fals (lambda (m h) (isZeroPH m)))))
 
-(debug '(reifyBool (fstPH (isOnePH (reflectNatPH 0)))))
-(debug '(reifyBool (fstPH (isOnePH (reflectNatPH 1)))))
-(debug '(reifyBool (fstPH (isOnePH (reflectNatPH 10)))))
+(debug '(reifyBool (isOnePH (reflectNatPH 0))))
+(debug '(reifyBool (isOnePH (reflectNatPH 1))))
+(debug '(reifyBool (isOnePH (reflectNatPH 10))))
 
 (define-curry onePH
   (succPH zeroPH))
@@ -459,11 +465,11 @@
 
 (define-curry cataPH
   (lambda (z s n)
-    (fstPH (natPH z (lambda-curried (m h) (s (fstPH h))) n))))
+    (fstPH (natPH z (lambda (m h) (s (fstPH h))) n))))
 
 (define-curry paraPH
   (lambda (z s n)
-    (fstPH (natPH z (lambda-curried (m h) (s m (fstPH h))) n))))
+    (fstPH (natPH z (lambda (m h) (s m (fstPH h))) n))))
 
 (define-curry plusPH
   (cataPH id (lambda (g x)
@@ -478,9 +484,168 @@
              (cataBool onePH (plusPH (fstPH h) (fstPH (sndPH h))) (isZeroPH m) ))
            n))))
 
-
 (debug '(reifyNatPH (fibPH (reflectNatPH 0))))
 (debug '(reifyNatPH (fibPH (reflectNatPH 1))))
 (debug '(reifyNatPH (fibPH (reflectNatPH 2))))
 (debug '(reifyNatPH (fibPH (reflectNatPH 5))))
 (debug '(reifyNatPH (fibPH (reflectNatPH 11))))
+
+(define-curry ltPH
+  (paraPH (const tru)
+	  (lambda (x w)
+	    (paraPH fals
+		    (lambda (y u)
+		      (w y))))))
+
+
+(debug '(reifyBool (uncurry ltPH (reflectNatPH 0) (reflectNatPH 0))))
+(debug '(reifyBool (uncurry ltPH (reflectNatPH 0) (reflectNatPH 1))))
+(debug '(reifyBool (uncurry ltPH (reflectNatPH 1) (reflectNatPH 0))))
+(debug '(reifyBool (uncurry ltPH (reflectNatPH 2) (reflectNatPH 2))))
+
+;; TODO
+;; zamienic fstPH na lambda + combine
+
+(define-curry singletonPH
+  (lambda (x)
+    (consPH x nilPH)))
+
+(define-curry insertPH
+  (lambda (x)
+    (combine fstPH
+	     (listPH (singletonPH x)
+		     (lambda (y ys h)
+		       (cataBool (consPH x (consPH y ys))
+				 (consPH y (fstPH h))
+				 (ltPH x y)))))))
+
+(debug '(reifyNatListPH (uncurry insertPH (reflectNatPH 1) (reflectNatListPH 0 2))))
+
+(define-curry insertSortPH
+  (combine fstPH
+	   (listPH nilPH (lambda (x xs h)
+			   (insertPH x (fstPH h))))))
+
+(debug '(reifyNatListPH (insertSortPH (reflectNatListPH))))
+(debug '(reifyNatListPH (insertSortPH (reflectNatListPH 1))))
+(debug '(reifyNatListPH (insertSortPH (reflectNatListPH 1 2))))
+(debug '(reifyNatListPH (insertSortPH (reflectNatListPH 2 3 1))))
+(debug '(reifyNatListPH (insertSortPH (reflectNatListPH 2 4 1 5 3))))
+
+(define-curry nthPH
+  (cataPH fstPH
+	  (lambda (x)
+	    (combine x sndPH))))
+
+(debug '(uncurry nthPH (reflectNatPH 0) (pairPH 1 (pairPH 2 (pairPH 3 4)))))
+(debug '(uncurry nthPH (reflectNatPH 2) (pairPH 1 (pairPH 2 (pairPH 3 4)))))
+
+
+(define-curry multPH
+  (cataPH (const zeroPH)
+	  (lambda (x b)
+	    (plusPH b (x b)))))
+
+(debug '(reifyNatPH (uncurry multPH (reflectNatPH 3) (reflectNatPH 3))))
+
+(define-curry predPH
+  (paraPH zeroPH
+	  (lambda (m h) m)))
+
+(debug '(reifyNatPH (predPH (reflectNatPH 0))))
+(debug '(reifyNatPH (predPH (reflectNatPH 10))))
+
+(define-curry minusPH2
+  (cataPH id (lambda (g x)
+                (predPH (g x)))))
+
+(define-curry minusPH
+  (lambda (x y)
+    (minusPH2 y x)))
+
+(debug '(reifyNatPH (uncurry minusPH (reflectNatPH 3) (reflectNatPH 4))))
+(debug '(reifyNatPH (uncurry minusPH (reflectNatPH 6) (reflectNatPH 4))))
+
+(define-curry fooPH
+  (lambda (m h)
+    (paraPH (nthPH m h)
+	    (lambda (i c)
+	      (plusPH (multPH (nthPH i h)
+			      (nthPH (minusPH m i) h))
+		      c))
+	    m)))
+
+(define (appendHistory h1 h2)
+  (if (equal? h1 'undefined)
+      h2
+      (pairPH (fstPH h1) (appendHistory (sndPH h1) h2))))
+
+(define (reverseHistoryPH h)
+  (if (equal? h 'undefined)
+      'undefined
+      (appendHistory (reverseHistoryPH (sndPH h))
+		     (pairPH (fstPH h)
+			     'undefined))))
+
+(define (zipMult h1 h2)
+  (if (equal? h1 'undefined)
+      'undefined
+      (pairPH (uncurry multPH (fstPH h1)
+		              (fstPH h2))
+	      (zipMult (sndPH h1)
+		       (sndPH h2)))))
+
+(define (sumPH h)
+  (if (equal? h 'undefined)
+      zeroPH
+      (uncurry plusPH (fstPH h)
+	              (sumPH (sndPH h)))))
+
+(define (reifyNatHistory h)
+  (if (equal? h 'undefined)
+      '()
+      (cons (reifyNatPH (fstPH h)) (reifyNatHistory (sndPH h)))))
+
+(define-curry catalanPH
+  (combine fstPH
+	   (natPH onePH (lambda (m h)
+			  (sumPH (curry zipMult h (reverseHistoryPH h)))))))
+
+;; (define-macro (debug2 n)
+;;   `(begin
+;;      (print ,n)
+;;      (print '=)
+;;      (print (eval n))
+;;      (newline)))
+
+
+;; (define-curry baz
+;;   (lambda (n)
+;;     (cataNat (lambda (n)
+;; 	       (curry debug n)
+;; 	       (curry + 1 n))
+;;  	     0
+;; 	     n)))
+
+;; (baz (reflectNat 5))
+
+(debug '(reifyNatPH (catalanPH (reflectNatPH 0))))
+(debug '(reifyNatPH (catalanPH (reflectNatPH 1))))
+(debug '(reifyNatPH (catalanPH (reflectNatPH 10))))
+
+(define-curry barPH
+  (lambda (m n h)
+    (multPH (nthPH m h)
+	    (nthPH (minusPH n m)))))
+
+(define h18
+  (pairPH (reflectNatPH 1) (pairPH (reflectNatPH 1) (pairPH (reflectNatPH 2) (pairPH (reflectNatPH 5) (pairPH (reflectNatPH 14) 'undefined))))))
+
+(debug '(reifyNatHistory h18))
+(debug '(reifyNatHistory (reverseHistoryPH h18)))
+(debug '(reifyNatPH (sumPH (zipMult h18 (reverseHistoryPH h18)))))
+
+
+;; (debug '(reifyNatPH (uncurry fooPH (reflectNatPH 3) h18)))
+;; (debug '(reifyNatPH (uncurry barPH (reflectNatPH 0)(reflectNatPH 1) h18)))
+;; (debug '(reifyNatPH (uncurry nthPH (uncurry minusPH (reflectNatPH 2) (reflectNatPH 0)) h18)))
