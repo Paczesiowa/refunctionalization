@@ -1,55 +1,263 @@
-* Refunkconalizacja katamorfizmow
-** Katamorfizm
+1. Refunkconalizacja katamorfizmow
+1.1 Katamorfizm
    formalny opis dostepny w (rowniez pozostalych schematow rekursji):
    http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.41.125
-*** Pseudoformalne Przyklady
-**** Unit
-     data Unit = Unit
+1.1.1 Pseudoformalne Przyklady
 
-     cataUnit :: a -> Unit -> a
-     cataUnit a Unit = a
+* Unit
+data Unit = MkUnit
 
-     cataUnit = const
-**** Pair
-     data Pair a b = Pair a b
+cataUnit :: a -> Unit -> a
+cataUnit a MkUnit = a
 
-     cataPair :: (a -> b -> c) -> Pair a b -> c
-     cataPair f (Pair a b) = f a b
+cataUnit = const
 
-     cataPair = uncurry
-**** Sum
-     data Sum a b = Left a
-                  | Right b
+* Pair
+data Pair a b = MkPair a b
 
-     cataSum :: (a -> c) -> (b -> c) -> Sum a b -> c
-     cataSum f g (Left x)  = f x
-     cataSum f g (Right x) = g x
+cataPair :: (a -> b -> c) -> Pair a b -> c
+cataPair f (MkPair a b) = f a b
 
-     cataSum = either
-**** Nat
+cataPair = uncurry
 
-     data Nat = Z
-              | S Nat
+* Sum
+data Sum a b = Left a
+             | Right b
 
-     cataNat :: (a -> a) -> a -> Nat -> a
-     cataNat f g Z = g
-     cataNat f g (S n) = f (cataNat f g n)
-**** List
-     data List a = Nil
-                 | Cons a (List a)
+cataSum :: (a -> c) -> (b -> c) -> Sum a b -> c
+cataSum f g (Left x)  = f x
+cataSum f g (Right x) = g x
 
-     cataList :: (a -> b -> b) -> b -> List a -> b
-     cataList f g Nil = g
-     cataList f g (Cons x xs) = f x (cataList f g xs)
+cataSum = either
 
-     cataList = foldr
+* Nat
 
-*** Nieformalny opis
-    Katamorfizm dla indukcyjnego typu danych (ko-typy sio!) bierze tyle argumentow ile typ ma
-    konstruktorow. Wybiera argument w zaleznosci od konstruktora, i aplikuje do niego:
-**** wszystkie nierekurencyjne pola/poddrzewa/argumenty konstruktora
-**** wszystkie rekurencyjne wystapienia tego samego typu
-     najpierw rekurencyjnie przetransformowane tym samym katamorfizmem (= tymi samymi argumentami)
-** opis refunkcjonalizacji typu przez jego katamorfizm i konstruktory, porownanie z churchami
+data Nat = Z
+         | S Nat
+
+cataNat :: (a -> a) -> a -> Nat -> a
+cataNat f g Z = g
+cataNat f g (S n) = f (cataNat f g n)
+
+* List
+
+data List a = Nil
+            | Cons a (List a)
+
+cataList :: (a -> b -> b) -> b -> List a -> b
+cataList f g Nil = g
+cataList f g (Cons x xs) = f x (cataList f g xs)
+
+cataList = foldr
+
+1.1.2 Nieformalny opis
+
+Katamorfizm dla indukcyjnego typu danych (ko-typy sio!) bierze tyle argumentow ile typ ma
+konstruktorow. Wybiera argument w zaleznosci od konstruktora, i aplikuje do niego:
+* wszystkie nierekurencyjne pola/poddrzewa/argumenty konstruktora
+* wszystkie rekurencyjne wystapienia tego samego typu, najpierw rekurencyjnie przetransformowane tym samym katamorfizmem (= tymi samymi argumentami)
+
+1.2 Refunkcjonalizacja katamorfizmowa
+
+Typ danych refunkcjonalizujemy poprzez zrefunkcjonalizowanie jego konstruktorow i katamorfizmu.
+
+1.2.1 Refunkcjonalizacja katamorfizmu
+
+Katamorfizm, ktory bierze n argumentow (rownowaznie: typ ma n konstruktorow),
+refunkcjonalizujemy w nastepujacy trywialny sposob (wszystkie inne morfizmy wygladaja identycznie)
+
+cataX = \x1 .. xn p. p x1 .. xn
+
+Przyklady:
+
+cataPair = \f p. p f
+cataNat  = \s z n. n s z
+cataList = \c n l. l c n
+
+1.2.2 Refunkcjonalizacja konstruktorow
+
+Konstruktory refunkcjonalizuje sie w taki sposob, aby rownania po refunkcjonalizacji
+rownania katamorfizmu pozostawaly spelnione.
+
+Przyklady:
+
+1) Pary
+szukamy zrefunkjonalizowanej wersji MkPair, ktora bedzie spelniac nastepujace rownanie
+(dla zrefunkcjonalizowanej wersji katamorfizmu):
+
+cataPair f (MkPair a b) = f a b
+
+cataPair = \f p. p f
+
+(\f p. p f) f' (MkPair a b) = f' a b
+(MkPair a b) f' = f' a b
+
+widac ze konstruktor musi wygladac tak:
+MkPair = \a b f'. f' a b
+
+2) Boole
+
+data Bool = True | False
+
+cataBool :: a -> a -> Bool -> a
+cataBool f g True = f
+cataBool f g False = g
+
+cataBool ~ if
+
+cataBool = \f g p. p f g
+
+cataBool f g True = f
+(\f g p. p f g) f' g' True = f'
+True f' g' = f'
+True = \f g. f
+
+podobnie:
+False = \f g. g
+
+3) Naty
+
+cataNat f g Z = g
+cataNat f g (S n) = f (cataNat f g n)
+
+cataNat = \s z n. n s z
+
+(\s z n. n s z) f g Z = g
+Z f g = g
+Z = \f g. g
+
+(\s z n. n s z) f g (S k) = f (cataNat f g k)
+(S k) f g = f ((\s z n. n s z) f g k)
+(S k) f g = f (k f g)
+S = \k f g. f (k f g)
+
+1.3 Porownanie z Churchami.
+
+Naty (i Boole) wyszly identyczne z numeralami Churcha, chociaz my wyszlismy od definicji
+indukcyjnej typu, a Church (chyba) rozmyslal o postaci lambda termu
+(poniewaz wszedzie (=na wikipedii), gdzie mowa o licznikach Churcha, jest napisana definicja
+nastepnika jako cos prostego i wynikajacego z definicji dodawania, kiedy wydaje sie oczywistym
+przyjac nastepnik i zero za operacje prymitywne.
+
+1.4 Refunkcjonalizacja kodu
+
+Niektore rzeczy sa trywialne do napisania, na przyklad (definicja zwinieta):
+
+first = cataPair (\x y. x)
+
+ciekawsze mozna w probowac wyliczac w sposob mechaniczny. popatrzmy na definicje
+koniunkcji w Haskellu:
+
+and :: Bool -> Bool -> Bool
+and True  True  = True
+and True  False = False
+and False True  = False
+and False False = False
+
+sprobujmy zrefunkcjonalizowac mechanicznie anda. hipoteza jest taka ze da sie
+te funkcje zapisac przy pomocy catamorfizmu na boolach:
+
+and = cataBool f g
+
+dla pewnych f, g. popatrzmy na rownania:
+
+(cataPair f g True) True   = True
+(cataPair f g True) False  = False
+(cataPair f g False) True  = False
+(cataPair f g False) False = False
+
+upraszczamy cataPair:
+
+(True f g) True   = True
+(True f g) False  = False
+(False f g) True  = False
+(False f g) False = False
+
+unfoldujemy konstruktory:
+
+f True  = True
+f False = False
+g True  = False
+g False = False
+
+teraz widzimy ze f rowniez polega na patternmatchingu, wiec postepujemy rekurencyjnie:
+zalozmy ze f da sie wyrazic katamorfizmem dla booli:
+
+f = cataBool h j
+
+patrzymy na rownania:
+
+cataBool h j True	= True
+cataBool h j False	= False
+
+upraszczamy cataBool:
+
+True h j  = True
+False h j = False
+
+upraszczamy konstruktory:
+
+h = True
+j = False
+
+zatem f = cataBool True False, a z analogicznego procesu otrzymujemy ze
+g = cataBool False False, co po podstawieniu do definicji pierwotnej anda:
+
+and = cataBool (cataBool True False) (cataBool False False)
+
+Przyklad ciekawszy, wykorzystujacy rekurencje, dodawanie:
+
+plus :: Nat -> Nat -> Nat
+plus Z Z         = Z
+plus Z (S b)	 = S b
+plus (S a) Z	 = S (plus a Z)
+plus (S a) (S b) = S (plus a (S b))
+
+zakladamy ze dodawanie da sie wyrazic katamorfizmem dla natow:
+
+plus = cataNat f g
+
+nasze rownania:
+
+(cataNat f g Z) Z       = Z
+(cataNat f g Z) (S b)	 = S b
+(cataNat f g (S a)) Z	 = S ((cataNat f g) a Z)
+(cataNat f g (S a)) (S b) = S ((cataNat f g) a (S b))
+
+upraszczamy cataNat po lewej stronie rownan:
+
+Z f g Z         = Z
+Z f g (S b)     = S b
+(S a) f g Z	= S ((cataNat f g) a Z)
+(S a) f g (S b) = S ((cataNat f g) a (S b))
+
+upraszczamy (lewe) konstruktory z lewej strony rownania:
+
+g Z         = Z
+g (S b)     = S b
+f (a f g) Z	= S ((cataNat f g) a Z)
+f (a f g) (S b) = S ((cataNat f g) a (S b))
+
+Powtarzamy algorytm najpierw dla funkcji g:
+
+g = cataNat h j
+
+cataNat h j Z = Z
+cataNat h j (S b) = (S b)
+
+Z h j = Z
+S b h j = S b
+
+j = Z
+h (b h j) = S b
+
+h (b h Z) = S b
+
+Tutaj niestety nasz algorytm utyka, gdyz nie wiemy (poki co) jak to rownanie rozwiazac.
+na chwile obecna mozemy jednak zalozyc ze g = \x. x
+
+Z = \f g. g
+S = \k f g. f (k f g)
+
 ** kod korzystajacy z katamorfizmow (add, minus), rownania
 ** definicja preda, generalizacja katamorfizmu do paramorfizmu
