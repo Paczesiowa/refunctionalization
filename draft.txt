@@ -1,0 +1,55 @@
+* Refunkconalizacja katamorfizmow
+** Katamorfizm
+   formalny opis dostepny w (rowniez pozostalych schematow rekursji):
+   http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.41.125
+*** Pseudoformalne Przyklady
+**** Unit
+     data Unit = Unit
+
+     cataUnit :: a -> Unit -> a
+     cataUnit a Unit = a
+
+     cataUnit = const
+**** Pair
+     data Pair a b = Pair a b
+
+     cataPair :: (a -> b -> c) -> Pair a b -> c
+     cataPair f (Pair a b) = f a b
+
+     cataPair = uncurry
+**** Sum
+     data Sum a b = Left a
+                  | Right b
+
+     cataSum :: (a -> c) -> (b -> c) -> Sum a b -> c
+     cataSum f g (Left x)  = f x
+     cataSum f g (Right x) = g x
+
+     cataSum = either
+**** Nat
+
+     data Nat = Z
+              | S Nat
+
+     cataNat :: (a -> a) -> a -> Nat -> a
+     cataNat f g Z = g
+     cataNat f g (S n) = f (cataNat f g n)
+**** List
+     data List a = Nil
+                 | Cons a (List a)
+
+     cataList :: (a -> b -> b) -> b -> List a -> b
+     cataList f g Nil = g
+     cataList f g (Cons x xs) = f x (cataList f g xs)
+
+     cataList = foldr
+
+*** Nieformalny opis
+    Katamorfizm dla indukcyjnego typu danych (ko-typy sio!) bierze tyle argumentow ile typ ma
+    konstruktorow. Wybiera argument w zaleznosci od konstruktora, i aplikuje do niego:
+**** wszystkie nierekurencyjne pola/poddrzewa/argumenty konstruktora
+**** wszystkie rekurencyjne wystapienia tego samego typu
+     najpierw rekurencyjnie przetransformowane tym samym katamorfizmem (= tymi samymi argumentami)
+** opis refunkcjonalizacji typu przez jego katamorfizm i konstruktory, porownanie z churchami
+** kod korzystajacy z katamorfizmow (add, minus), rownania
+** definicja preda, generalizacja katamorfizmu do paramorfizmu
